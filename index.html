@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermomètre Émotionnel | Management Régénératif</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌡️</text></svg>">
+    <style>
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 12px;
+            border-radius: 6px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 28px;
+            width: 28px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #0d6e6e;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            margin-top: -8px;
+            transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        input[type="range"]::-webkit-slider-thumb:active {
+            transform: scale(0.95);
+        }
+        input[type="range"]::-moz-range-thumb {
+            height: 28px;
+            width: 28px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #0d6e6e;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .animate-bounce-in {
+            animation: bounceIn 0.3s ease-out;
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ThermometreEmotionnel = () => {
+            // États pour les curseurs
+            const [energie, setEnergie] = useState(3);
+            const [stress, setStress] = useState(3);
+            const [humeur, setHumeur] = useState(3);
+            
+            // Historique des 14 derniers jours
+            const [historique, setHistorique] = useState([]);
+            const [showHistorique, setShowHistorique] = useState(false);
+            const [showAlerte, setShowAlerte] = useState(false);
+            const [enregistre, setEnregistre] = useState(false);
+            const [jourActuel, setJourActuel] = useState(1);
+            const [showExport, setShowExport] = useState(false);
+            
+            // Calcul du score total (stress inversé car 5 = beaucoup de stress = mauvais)
+            const stressInverse = 6 - stress;
+            const scoreTotal = energie + stressInverse + humeur;
+            const scoreSeuil = 9;
+            
+            // Charger l'historique au démarrage
+            useEffect(() => {
+                const saved = localStorage.getItem('thermometre-historique-mr');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    setHistorique(parsed);
+                    setJourActuel(parsed.length + 1);
+                }
+            }, []);
+            
+            // Déterminer le statut
+            const getStatut = (score) => {
+                if (score >= 13) return { label: 'Excellent', color: '#059669', emoji: '🌟', bg: '#d1fae5', message: 'Conditions idéales pour observer' };
+                if (score >= 11) return { label: 'Bon', color: '#10b981', emoji: '✅', bg: '#dcfce7', message: 'Vous pouvez commencer sereinement' };
+                if (score >= 9) return { label: 'Acceptable', color: '#eab308', emoji: '👍', bg: '#fef9c3', message: 'Conditions correctes, restez vigilant' };
+                if (score >= 7) return { label: 'Attention', color: '#f97316', emoji: '⚠️', bg: '#ffedd5', message: 'Vos observations pourraient être biaisées' };
+                return { label: 'Reporter', color: '#dc2626', emoji: '🛑', bg: '#fee2e2', message: 'Reportez cette session, prenez soin de vous' };
+            };
+            
+            const statut = getStatut(scoreTotal);
+            
+            // Labels pour les curseurs
+            const getEnergieLabel = (val) => {
+                const labels = ['Épuisé(e)', 'Fatigué(e)', 'Neutre', 'En forme', 'Plein d\'énergie'];
+                return labels[val - 1];
+            };
+            
+            const getStressLabel = (val) => {
+                const labels = ['Très serein(e)', 'Détendu(e)', 'Neutre', 'Tendu(e)', 'Très stressé(e)'];
+                return labels[val - 1];
+            };
+            
+            const getHumeurLabel = (val) => {
+                const labels = ['Très négatif', 'Plutôt bas', 'Neutre', 'Plutôt bon', 'Excellent'];
+                return labels[val - 1];
+            };
+            
+            // Enregistrer la mesure du jour
+            const enregistrerMesure = () => {
+                const now = new Date();
+                const nouvelleMesure = {
+                    date: now.toLocaleDateString('fr-FR'),
+                    heure: now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                    jour: jourActuel,
+                    energie,
+                    stress,
+                    stressInverse,
+                    humeur,
+                    scoreTotal,
+                    statut: statut.label
+                };
+                
+                const nouvelHistorique = [...historique, nouvelleMesure].slice(-14);
+                setHistorique(nouvelHistorique);
+                localStorage.setItem('thermometre-historique-mr', JSON.stringify(nouvelHistorique));
+                setEnregistre(true);
+                setJourActuel(prev => prev + 1);
+                
+                if (scoreTotal < scoreSeuil) {
+                    setShowAlerte(true);
+                }
+                
+                setTimeout(() => setEnregistre(false), 2500);
+            };
+            
+            // Exporter en PDF (génère un texte formaté)
+            const exporterHistorique = () => {
+                if (historique.length === 0) return;
+                
+                let texte = "═══════════════════════════════════════════════════════════\n";
+                texte += "        JOURNAL ÉMOTIONNEL - MANAGEMENT RÉGÉNÉRATIF\n";
+                texte += "                    Feuille de route FR01-IND\n";
+                texte += "═══════════════════════════════════════════════════════════\n\n";
+                texte += `Export du : ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}\n`;
+                texte += `Période : ${historique.length} jours enregistrés\n\n`;
+                texte += "───────────────────────────────────────────────────────────\n";
+                texte += "DÉTAIL DES MESURES\n";
+                texte += "───────────────────────────────────────────────────────────\n\n";
+                
+                historique.forEach(h => {
+                    texte += `📅 Jour ${h.jour} - ${h.date} à ${h.heure}\n`;
+                    texte += `   ⚡ Énergie: ${h.energie}/5 | 😰 Stress: ${h.stress}/5 | 😊 Humeur: ${h.humeur}/5\n`;
+                    texte += `   📊 Score total: ${h.scoreTotal}/15 → ${h.statut} ${getStatut(h.scoreTotal).emoji}\n\n`;
+                });
+                
+                const moyenne = (historique.reduce((sum, h) => sum + h.scoreTotal, 0) / historique.length).toFixed(1);
+                const sessionsReportees = historique.filter(h => h.scoreTotal < scoreSeuil).length;
+                
+                texte += "───────────────────────────────────────────────────────────\n";
+                texte += "SYNTHÈSE\n";
+                texte += "───────────────────────────────────────────────────────────\n\n";
+                texte += `📈 Score moyen : ${moyenne}/15\n`;
+                texte += `⚠️ Sessions à reporter : ${sessionsReportees}/${historique.length}\n`;
+                texte += `✅ Sessions valides : ${historique.length - sessionsReportees}/${historique.length}\n\n`;
+                texte += "═══════════════════════════════════════════════════════════\n";
+                texte += "         © Management Régénératif - Benjamin Chaminade\n";
+                texte += "═══════════════════════════════════════════════════════════\n";
+                
+                // Créer et télécharger le fichier
+                const blob = new Blob([texte], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `journal-emotionnel-${new Date().toISOString().split('T')[0]}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                setShowExport(true);
+                setTimeout(() => setShowExport(false), 2000);
+            };
+            
+            // Réinitialiser l'historique
+            const reinitialiser = () => {
+                if (confirm('Voulez-vous vraiment effacer tout l\'historique ? Cette action est irréversible.')) {
+                    setHistorique([]);
+                    localStorage.removeItem('thermometre-historique-mr');
+                    setJourActuel(1);
+                }
+            };
+            
+            // Composant Curseur personnalisé
+            const Curseur = ({ label, icon, value, onChange, getLabel, couleurBas, couleurHaut, inverse = false }) => {
+                const couleur = inverse 
+                    ? value <= 2 ? '#10b981' : value >= 4 ? '#dc2626' : '#eab308'
+                    : value >= 4 ? '#10b981' : value <= 2 ? '#dc2626' : '#eab308';
+                
+                return (
+                    <div className="mb-8">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="font-semibold text-gray-700 text-lg">{icon} {label}</span>
+                            <span 
+                                className="px-4 py-1.5 rounded-full text-sm font-semibold transition-all duration-300"
+                                style={{ backgroundColor: couleur + '20', color: couleur }}
+                            >
+                                {getLabel(value)}
+                            </span>
+                        </div>
+                        <div className="relative px-2">
+                            <input
+                                type="range"
+                                min="1"
+                                max="5"
+                                value={value}
+                                onChange={(e) => onChange(parseInt(e.target.value))}
+                                className="w-full h-3 rounded-full cursor-pointer"
+                                style={{
+                                    background: `linear-gradient(to right, ${couleurBas}, #eab308, ${couleurHaut})`
+                                }}
+                            />
+                            <div className="flex justify-between text-xs text-gray-400 mt-2 px-1 font-medium">
+                                <span>1</span>
+                                <span>2</span>
+                                <span>3</span>
+                                <span>4</span>
+                                <span>5</span>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+            
+            // Composant Jauge circulaire
+            const JaugeCirculaire = ({ score, max = 15 }) => {
+                const pourcentage = (score / max) * 100;
+                const circonference = 2 * Math.PI * 52;
+                const offset = circonference - (pourcentage / 100) * circonference;
+                
+                return (
+                    <div className="relative w-36 h-36 mx-auto">
+                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 140 140">
+                            <circle
+                                cx="70"
+                                cy="70"
+                                r="52"
+                                stroke="#e5e7eb"
+                                strokeWidth="12"
+                                fill="none"
+                            />
+                            <circle
+                                cx="70"
+                                cy="70"
+                                r="52"
+                                stroke={statut.color}
+                                strokeWidth="12"
+                                fill="none"
+                                strokeDasharray={circonference}
+                                strokeDashoffset={offset}
+                                strokeLinecap="round"
+                                className="transition-all duration-700 ease-out"
+                            />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-4xl font-bold transition-colors duration-300" style={{ color: statut.color }}>{score}</span>
+                            <span className="text-sm text-gray-400 font-medium">sur {max}</span>
+                        </div>
+                    </div>
+                );
+            };
+            
+            // Mini graphique de tendance
+            const GraphiqueTendance = () => {
+                if (historique.length < 2) return null;
+                
+                const derniers7 = historique.slice(-7);
+                const maxScore = 15;
+                const hauteur = 80;
+                const largeur = 280;
+                const padding = 20;
+                
+                const points = derniers7.map((h, i) => {
+                    const x = padding + (i / Math.max(derniers7.length - 1, 1)) * (largeur - 2 * padding);
+                    const y = hauteur - padding - ((h.scoreTotal / maxScore) * (hauteur - 2 * padding));
+                    return { x, y, score: h.scoreTotal };
+                });
+                
+                const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                
+                return (
+                    <div className="mt-6 bg-white bg-opacity-50 rounded-xl p-4">
+                        <p className="text-xs text-gray-500 mb-3 text-center font-medium">📈 Évolution sur les {derniers7.length} derniers jours</p>
+                        <svg viewBox={`0 0 ${largeur} ${hauteur}`} className="w-full h-20">
+                            {/* Ligne de seuil */}
+                            <line 
+                                x1={padding} 
+                                y1={hauteur - padding - ((scoreSeuil / maxScore) * (hauteur - 2 * padding))} 
+                                x2={largeur - padding} 
+                                y2={hauteur - padding - ((scoreSeuil / maxScore) * (hauteur - 2 * padding))}
+                                stroke="#dc2626"
+                                strokeDasharray="4,4"
+                                strokeWidth="1"
+                                opacity="0.5"
+                            />
+                            <text 
+                                x={largeur - padding + 5} 
+                                y={hauteur - padding - ((scoreSeuil / maxScore) * (hauteur - 2 * padding)) + 4}
+                                fontSize="8"
+                                fill="#dc2626"
+                            >
+                                seuil
+                            </text>
+                            
+                            {/* Aire sous la courbe */}
+                            <path
+                                d={`${pathD} L ${points[points.length-1].x} ${hauteur - padding} L ${points[0].x} ${hauteur - padding} Z`}
+                                fill="#0d6e6e"
+                                opacity="0.1"
+                            />
+                            
+                            {/* Courbe */}
+                            <path
+                                d={pathD}
+                                fill="none"
+                                stroke="#0d6e6e"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
+                            
+                            {/* Points */}
+                            {points.map((p, i) => (
+                                <g key={i}>
+                                    <circle
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r="6"
+                                        fill={getStatut(p.score).color}
+                                        stroke="white"
+                                        strokeWidth="2"
+                                    />
+                                </g>
+                            ))}
+                        </svg>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-emerald-50 p-4 pb-8">
+                    <div className="max-w-md mx-auto">
+                        {/* En-tête */}
+                        <div className="text-center mb-6 pt-4">
+                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 text-white text-4xl mb-4 shadow-lg">
+                                🌡️
+                            </div>
+                            <h1 className="text-2xl font-bold text-gray-800">Thermomètre Émotionnel</h1>
+                            <p className="text-teal-600 font-medium mt-1">Management Régénératif</p>
+                            <div className="inline-flex items-center gap-2 mt-2 px-3 py-1 bg-teal-100 rounded-full">
+                                <span className="w-2 h-2 bg-teal-500 rounded-full pulse"></span>
+                                <span className="text-teal-700 text-sm font-medium">Jour {Math.min(jourActuel, 14)} / 14</span>
+                            </div>
+                        </div>
+                        
+                        {/* Carte principale */}
+                        <div className="bg-white rounded-3xl shadow-xl p-6 mb-4 border border-gray-100">
+                            <p className="text-center text-gray-500 mb-8 text-sm">
+                                Évaluez votre état <strong className="text-gray-700">avant</strong> de commencer votre session d'observation
+                            </p>
+                            
+                            {/* Curseurs */}
+                            <Curseur
+                                label="Énergie"
+                                icon="⚡"
+                                value={energie}
+                                onChange={setEnergie}
+                                getLabel={getEnergieLabel}
+                                couleurBas="#dc2626"
+                                couleurHaut="#10b981"
+                            />
+                            
+                            <Curseur
+                                label="Stress"
+                                icon="😰"
+                                value={stress}
+                                onChange={setStress}
+                                getLabel={getStressLabel}
+                                couleurBas="#10b981"
+                                couleurHaut="#dc2626"
+                                inverse={true}
+                            />
+                            
+                            <Curseur
+                                label="Humeur"
+                                icon="😊"
+                                value={humeur}
+                                onChange={setHumeur}
+                                getLabel={getHumeurLabel}
+                                couleurBas="#dc2626"
+                                couleurHaut="#10b981"
+                            />
+                            
+                            {/* Résultat */}
+                            <div 
+                                className="mt-8 p-6 rounded-2xl text-center transition-all duration-500"
+                                style={{ backgroundColor: statut.bg }}
+                            >
+                                <JaugeCirculaire score={scoreTotal} />
+                                
+                                <div className="mt-4">
+                                    <span className="text-3xl mr-2">{statut.emoji}</span>
+                                    <span 
+                                        className="text-2xl font-bold"
+                                        style={{ color: statut.color }}
+                                    >
+                                        {statut.label}
+                                    </span>
+                                </div>
+                                
+                                <p className="text-sm text-gray-600 mt-3 font-medium">
+                                    {statut.message}
+                                </p>
+                                
+                                <GraphiqueTendance />
+                            </div>
+                            
+                            {/* Bouton enregistrer */}
+                            <button
+                                onClick={enregistrerMesure}
+                                disabled={enregistre}
+                                className={`w-full mt-6 py-4 px-4 rounded-xl font-semibold text-white transition-all duration-300 text-lg shadow-lg ${
+                                    enregistre 
+                                        ? 'bg-green-500 shadow-green-200' 
+                                        : 'bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 active:scale-[0.98] shadow-teal-200'
+                                }`}
+                            >
+                                {enregistre ? '✓ Enregistré !' : '📝 Enregistrer ma mesure du jour'}
+                            </button>
+                        </div>
+                        
+                        {/* Historique */}
+                        <div className="bg-white rounded-3xl shadow-xl p-5 border border-gray-100">
+                            <button
+                                onClick={() => setShowHistorique(!showHistorique)}
+                                className="w-full flex justify-between items-center"
+                            >
+                                <span className="font-semibold text-gray-700">📊 Mon journal ({historique.length}/14 jours)</span>
+                                <span className={`text-gray-400 transition-transform duration-300 ${showHistorique ? 'rotate-180' : ''}`}>▼</span>
+                            </button>
+                            
+                            {showHistorique && (
+                                <div className="mt-4 animate-bounce-in">
+                                    {historique.length === 0 ? (
+                                        <p className="text-center text-gray-400 py-8">
+                                            <span className="text-4xl block mb-2">📝</span>
+                                            Aucune mesure enregistrée
+                                        </p>
+                                    ) : (
+                                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                            {[...historique].reverse().map((h, i) => (
+                                                <div 
+                                                    key={i}
+                                                    className="flex items-center justify-between p-3 rounded-xl transition-all hover:scale-[1.01]"
+                                                    style={{ backgroundColor: getStatut(h.scoreTotal).bg }}
+                                                >
+                                                    <div>
+                                                        <span className="font-semibold text-gray-700">Jour {h.jour}</span>
+                                                        <span className="text-gray-400 text-sm ml-2">{h.date}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span 
+                                                            className="font-bold text-lg"
+                                                            style={{ color: getStatut(h.scoreTotal).color }}
+                                                        >
+                                                            {h.scoreTotal}
+                                                        </span>
+                                                        <span className="text-xl">{getStatut(h.scoreTotal).emoji}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    
+                                    {historique.length > 0 && (
+                                        <div className="mt-4 pt-4 border-t border-gray-100">
+                                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                                <div className="bg-teal-50 rounded-xl p-3 text-center">
+                                                    <p className="text-xs text-teal-600 font-medium">Moyenne</p>
+                                                    <p className="text-xl font-bold text-teal-700">
+                                                        {(historique.reduce((sum, h) => sum + h.scoreTotal, 0) / historique.length).toFixed(1)}
+                                                        <span className="text-sm font-normal">/15</span>
+                                                    </p>
+                                                </div>
+                                                <div className="bg-orange-50 rounded-xl p-3 text-center">
+                                                    <p className="text-xs text-orange-600 font-medium">Sessions reportées</p>
+                                                    <p className="text-xl font-bold text-orange-700">
+                                                        {historique.filter(h => h.scoreTotal < scoreSeuil).length}
+                                                        <span className="text-sm font-normal">/{historique.length}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={exporterHistorique}
+                                                    className="flex-1 py-2.5 text-sm text-teal-600 hover:bg-teal-50 rounded-xl transition-colors font-medium"
+                                                >
+                                                    {showExport ? '✓ Exporté !' : '📥 Exporter'}
+                                                </button>
+                                                <button
+                                                    onClick={reinitialiser}
+                                                    className="flex-1 py-2.5 text-sm text-red-500 hover:bg-red-50 rounded-xl transition-colors font-medium"
+                                                >
+                                                    🗑️ Réinitialiser
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Alerte modale */}
+                        {showAlerte && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+                                <div className="bg-white rounded-3xl p-8 max-w-sm w-full animate-bounce-in shadow-2xl">
+                                    <div className="text-center">
+                                        <div className="text-6xl mb-4">⚠️</div>
+                                        <h3 className="text-2xl font-bold text-gray-800 mb-3">Session à reporter</h3>
+                                        <p className="text-gray-600 mb-4">
+                                            Votre score de <strong className="text-red-600">{scoreTotal}/15</strong> est inférieur au seuil recommandé de <strong>{scoreSeuil}/15</strong>.
+                                        </p>
+                                        <div className="bg-amber-50 rounded-xl p-4 mb-6">
+                                            <p className="text-sm text-amber-800">
+                                                💡 Vos observations risquent d'être biaisées par votre état émotionnel actuel. 
+                                                <strong> Prenez soin de vous</strong> et réessayez quand vous vous sentirez mieux.
+                                            </p>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <button
+                                                onClick={() => setShowAlerte(false)}
+                                                className="w-full py-4 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-xl font-semibold hover:from-teal-600 hover:to-teal-700 transition-all shadow-lg"
+                                            >
+                                                ✓ J'ai compris, je reporte
+                                            </button>
+                                            <button
+                                                onClick={() => setShowAlerte(false)}
+                                                className="w-full py-3 text-gray-400 hover:bg-gray-100 rounded-xl text-sm transition-colors"
+                                            >
+                                                Continuer quand même
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Footer */}
+                        <div className="text-center mt-8 space-y-1">
+                            <p className="text-xs text-gray-400">Management Régénératif © 2025</p>
+                            <p className="text-xs text-gray-400">Feuille de route FR01-IND • Audit Personnel</p>
+                            <p className="text-xs text-teal-500 font-medium">benjaminchaminade.com</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<ThermometreEmotionnel />, document.getElementById('root'));
+    </script>
+</body>
+</html>
